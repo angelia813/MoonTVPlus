@@ -41,12 +41,14 @@ import {
   Mail,
   Palette,
   Plus,
+  Search,
   Settings,
   Trash2,
   Tv,
   UserPlus,
   Users,
   Video,
+  X,
 } from 'lucide-react';
 import { GripVertical } from 'lucide-react';
 import {
@@ -512,8 +514,10 @@ interface UserConfigProps {
   userPage: number;
   userTotalPages: number;
   userTotal: number;
-  fetchUsersV2: (page: number) => Promise<void>;
+  fetchUsersV2: (page: number, search?: string) => Promise<void>;
   userListLoading: boolean;
+  userSearch: string;
+  setUserSearch: (value: string) => void;
 }
 
 const UserConfig = ({
@@ -526,6 +530,8 @@ const UserConfig = ({
   userTotal,
   fetchUsersV2,
   userListLoading,
+  userSearch,
+  setUserSearch,
 }: UserConfigProps) => {
   const { alertModal, showAlert, hideAlert } = useAlertModal();
   const { isLoading, withLoading } = useLoadingState();
@@ -582,6 +588,7 @@ const UserConfig = ({
   } | null>(null);
   const [showDeleteUserModal, setShowDeleteUserModal] = useState(false);
   const [deletingUser, setDeletingUser] = useState<string | null>(null);
+  const trimmedUserSearch = userSearch.trim();
 
   // 当前登录用户名
   const currentUsername = getAuthInfoFromBrowserCookie()?.username || null;
@@ -887,7 +894,7 @@ const UserConfig = ({
       if (checked) {
         // 只选择自己有权限操作的用户
         const selectableUsernames =
-          config?.UserConfig?.Users?.filter(
+          displayUsers?.filter(
             (user) =>
               role === 'owner' ||
               (role === 'admin' &&
@@ -898,7 +905,7 @@ const UserConfig = ({
         setSelectedUsers(new Set());
       }
     },
-    [config?.UserConfig?.Users, role, currentUsername]
+    [displayUsers, role, currentUsername]
   );
 
   // 批量设置用户组
@@ -1240,15 +1247,87 @@ const UserConfig = ({
 
       {/* 用户列表 */}
       <div>
-        <div className='flex items-center justify-between mb-3'>
-          <h4 className='text-sm font-medium text-gray-700 dark:text-gray-300'>
-            用户列表
-          </h4>
-          <div className='flex items-center space-x-2'>
+        <div className='mb-3 space-y-3'>
+          <div className='flex items-center justify-between gap-3'>
+            <h4 className='text-sm font-medium text-gray-700 dark:text-gray-300'>
+              用户列表
+            </h4>
+            <button
+              onClick={() => {
+                setShowAddUserForm(!showAddUserForm);
+                if (showChangePasswordForm) {
+                  setShowChangePasswordForm(false);
+                  setChangePasswordUser({ username: '', password: '' });
+                }
+              }}
+              className={
+                showAddUserForm
+                  ? buttonStyles.secondary
+                  : buttonStyles.success
+              }
+            >
+              {showAddUserForm ? '取消' : '添加用户'}
+            </button>
+          </div>
+          <div className='flex w-full flex-wrap items-center justify-end gap-2'>
+            {!hasOldUserData && usersV2 && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  setSelectedUsers(new Set());
+                  fetchUsersV2(1, trimmedUserSearch);
+                }}
+                className='ml-auto flex min-w-0 items-center gap-2'
+              >
+                <div className='relative w-44 sm:w-56'>
+                  <Search className='absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400' />
+                  <input
+                    type='text'
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                    placeholder='按用户名搜索'
+                    className='w-full pl-9 pr-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent'
+                  />
+                </div>
+                {trimmedUserSearch && (
+                  <button
+                    type='button'
+                    onClick={() => {
+                      setUserSearch('');
+                      setSelectedUsers(new Set());
+                      fetchUsersV2(1, '');
+                    }}
+                    disabled={userListLoading}
+                    aria-label='清空搜索'
+                    title='清空'
+                    className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors ${
+                      userListLoading
+                        ? 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed text-white'
+                        : 'bg-gray-600 hover:bg-gray-700 dark:bg-gray-600 dark:hover:bg-gray-700 text-white'
+                    }`}
+                  >
+                    <X className='h-4 w-4' />
+                  </button>
+                )}
+                <button
+                  type='submit'
+                  disabled={userListLoading}
+                  aria-label='搜索用户'
+                  title='搜索'
+                  className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors ${
+                    userListLoading
+                      ? 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed text-white'
+                      : 'bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700 text-white'
+                  }`}
+                >
+                  <Search className='h-4 w-4' />
+                </button>
+              </form>
+            )}
             {/* 批量操作按钮 */}
             {selectedUsers.size > 0 && (
               <>
-                <div className='flex items-center space-x-3'>
+                <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:space-x-3'>
                   <span className='text-sm text-gray-600 dark:text-gray-400'>
                     已选择 {selectedUsers.size} 个用户
                   </span>
@@ -1259,23 +1338,9 @@ const UserConfig = ({
                     批量设置用户组
                   </button>
                 </div>
-                <div className='w-px h-6 bg-gray-300 dark:bg-gray-600'></div>
+                <div className='hidden sm:block w-px h-6 bg-gray-300 dark:bg-gray-600'></div>
               </>
             )}
-            <button
-              onClick={() => {
-                setShowAddUserForm(!showAddUserForm);
-                if (showChangePasswordForm) {
-                  setShowChangePasswordForm(false);
-                  setChangePasswordUser({ username: '', password: '' });
-                }
-              }}
-              className={
-                showAddUserForm ? buttonStyles.secondary : buttonStyles.success
-              }
-            >
-              {showAddUserForm ? '取消' : '添加用户'}
-            </button>
           </div>
         </div>
 
@@ -1448,7 +1513,7 @@ const UserConfig = ({
                   <th className='w-10 px-1 py-3 text-center'>
                     {(() => {
                       // 检查是否有权限操作任何用户
-                      const hasAnyPermission = config?.UserConfig?.Users?.some(
+                      const hasAnyPermission = displayUsers?.some(
                         (user) =>
                           role === 'owner' ||
                           (role === 'admin' &&
@@ -1516,7 +1581,7 @@ const UserConfig = ({
                     <tbody>
                       <tr>
                         <td
-                          colSpan={7}
+                          colSpan={8}
                           className='px-6 py-8 text-center text-gray-500 dark:text-gray-400'
                         >
                           加载中...
@@ -1536,6 +1601,23 @@ const UserConfig = ({
                   };
                   return priority(a) - priority(b);
                 });
+                if (sortedUsers.length === 0) {
+                  return (
+                    <tbody>
+                      <tr>
+                        <td
+                          colSpan={8}
+                          className='px-6 py-8 text-center text-gray-500 dark:text-gray-400'
+                        >
+                          {trimmedUserSearch
+                            ? `未找到用户名包含“${trimmedUserSearch}”的用户`
+                            : '暂无用户'}
+                        </td>
+                      </tr>
+                    </tbody>
+                  );
+                }
+
                 return (
                   <tbody className='divide-y divide-gray-200 dark:divide-gray-700'>
                     {sortedUsers.map((user) => {
@@ -1778,11 +1860,14 @@ const UserConfig = ({
           {!hasOldUserData && usersV2 && userTotalPages > 1 && (
             <div className='mt-4 flex items-center justify-between px-4'>
               <div className='text-sm text-gray-600 dark:text-gray-400'>
-                共 {userTotal} 个用户，第 {userPage} / {userTotalPages} 页
+                {trimmedUserSearch
+                  ? `搜索结果 ${userTotal} 个用户`
+                  : `共 ${userTotal} 个用户`}
+                ，第 {userPage} / {userTotalPages} 页
               </div>
               <div className='flex items-center space-x-2'>
                 <button
-                  onClick={() => fetchUsersV2(1)}
+                  onClick={() => fetchUsersV2(1, trimmedUserSearch)}
                   disabled={userPage === 1}
                   className={`px-3 py-1 text-sm rounded ${
                     userPage === 1
@@ -1793,7 +1878,7 @@ const UserConfig = ({
                   首页
                 </button>
                 <button
-                  onClick={() => fetchUsersV2(userPage - 1)}
+                  onClick={() => fetchUsersV2(userPage - 1, trimmedUserSearch)}
                   disabled={userPage === 1}
                   className={`px-3 py-1 text-sm rounded ${
                     userPage === 1
@@ -1804,7 +1889,7 @@ const UserConfig = ({
                   上一页
                 </button>
                 <button
-                  onClick={() => fetchUsersV2(userPage + 1)}
+                  onClick={() => fetchUsersV2(userPage + 1, trimmedUserSearch)}
                   disabled={userPage === userTotalPages}
                   className={`px-3 py-1 text-sm rounded ${
                     userPage === userTotalPages
@@ -1815,7 +1900,7 @@ const UserConfig = ({
                   下一页
                 </button>
                 <button
-                  onClick={() => fetchUsersV2(userTotalPages)}
+                  onClick={() => fetchUsersV2(userTotalPages, trimmedUserSearch)}
                   disabled={userPage === userTotalPages}
                   className={`px-3 py-1 text-sm rounded ${
                     userPage === userTotalPages
@@ -16125,14 +16210,23 @@ function AdminPageClient() {
   const [userTotalPages, setUserTotalPages] = useState(1);
   const [userTotal, setUserTotal] = useState(0);
   const [userListLoading, setUserListLoading] = useState(false);
+  const [userSearch, setUserSearch] = useState('');
   const userLimit = 10;
 
   // 获取新版本用户列表
-  const fetchUsersV2 = useCallback(async (page = 1) => {
+  const fetchUsersV2 = useCallback(async (page = 1, search = userSearch) => {
     try {
       setUserListLoading(true);
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(userLimit),
+      });
+      const trimmedSearch = search.trim();
+      if (trimmedSearch) {
+        params.set('search', trimmedSearch);
+      }
       const response = await fetch(
-        `/api/admin/users?page=${page}&limit=${userLimit}`
+        `/api/admin/users?${params.toString()}`
       );
       if (response.ok) {
         const data = await response.json();
@@ -16146,7 +16240,7 @@ function AdminPageClient() {
     } finally {
       setUserListLoading(false);
     }
-  }, []);
+  }, [userSearch]);
 
   // 刷新配置和用户列表
   const refreshConfigAndUsers = useCallback(async () => {
@@ -16418,9 +16512,9 @@ function AdminPageClient() {
           </CollapsibleTab>
 
           <div className='space-y-4'>
-            {/* 用户配置标签 */}
+            {/* 用户管理标签 */}
             <CollapsibleTab
-              title='用户配置'
+              title='用户管理'
               icon={
                 <Users size={20} className='text-gray-600 dark:text-gray-400' />
               }
@@ -16437,6 +16531,8 @@ function AdminPageClient() {
                 userTotal={userTotal}
                 fetchUsersV2={fetchUsersV2}
                 userListLoading={userListLoading}
+                userSearch={userSearch}
+                setUserSearch={setUserSearch}
               />
             </CollapsibleTab>
 
