@@ -257,6 +257,28 @@ export function DownloadManagementPanel({
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
+  const getTaskExportFilename = (
+    task: CompletedTask,
+    usedFilenames: Set<string>
+  ) => {
+    const episodeLabel = `第${task.episodeIndex + 1}集`;
+    const baseTitle = task.videoTitle || getGroupTitle([task]);
+    const episodeTitle = task.episodeTitle
+      ? `${episodeLabel}_${task.episodeTitle}`
+      : episodeLabel;
+    const baseFilename = sanitizeFilename(`${baseTitle}_${episodeTitle}`);
+    let filename = `${baseFilename}.ts`;
+    let duplicateIndex = 2;
+
+    while (usedFilenames.has(filename)) {
+      filename = `${baseFilename}_${duplicateIndex}.ts`;
+      duplicateIndex += 1;
+    }
+
+    usedFilenames.add(filename);
+    return filename;
+  };
+
   const getStoredDownloadDirHandle = async (): Promise<
     FileSystemDirectoryHandle | undefined
   > => {
@@ -399,7 +421,8 @@ export function DownloadManagementPanel({
         }
       }
 
-      const blobParts: BlobPart[] = [];
+      const usedFilenames = new Set<string>();
+      let exportedCount = 0;
       const failedTitles: string[] = [];
 
       for (const task of tasksToExport) {
@@ -408,27 +431,19 @@ export function DownloadManagementPanel({
             task.downloadMode === 'filesystem'
               ? await readFilesystemTaskAsBlobParts(task, dirHandle!)
               : await readIndexedDBTaskAsBlobParts(task);
-          blobParts.push(...parts);
+          const blob = new Blob(parts, { type: 'video/MP2T' });
+          triggerBlobDownload(blob, getTaskExportFilename(task, usedFilenames));
+          exportedCount += 1;
         } catch (error) {
           console.error('导出任务失败:', task.title, error);
           failedTitles.push(`第 ${task.episodeIndex + 1} 集`);
         }
       }
 
-      if (blobParts.length === 0) {
+      if (exportedCount === 0) {
         alert(`导出失败：${failedTitles.join('、') || '未找到可导出的内容'}`);
         return;
       }
-
-      const selectedGroups = videoGroups.filter((group) =>
-        group.tasks.some((task) => selectedIds.has(task.id))
-      );
-      const baseName =
-        selectedGroups.length === 1
-          ? selectedGroups[0].title
-          : `MoonTVPlus导出_${tasksToExport.length}集`;
-      const blob = new Blob(blobParts, { type: 'video/MP2T' });
-      triggerBlobDownload(blob, `${sanitizeFilename(baseName)}.ts`);
 
       if (failedTitles.length > 0) {
         alert(`已导出可读取的内容，但以下条目失败：${failedTitles.join('、')}`);
